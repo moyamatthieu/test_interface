@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Autopilote Cerf-Volant</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Fira+Code:wght@400&display=swap" rel="stylesheet">
+    <style>
+      /* Lucide Icons Font */
+      @font-face {
+        font-family: 'LucideIcons';
+        src: url(https://cdn.jsdelivr.net/npm/lucide-static@latest/font/Lucide.ttf) format('truetype');
+      }
+      .lucide {
+        font-family: 'LucideIcons';
+        font-size: 1.1rem; /* Taille de police légèrement plus petite par défaut */
+        line-height: 1;
+        vertical-align: middle;
+        display: inline-block;
+      }
+      .lucide-lg { font-size: 1.25rem; } /* Pour les titres principaux */
+      .lucide-sm { font-size: 1rem; } /* Pour les boutons */
+
+      /* Basic styling for message box */
+      .message-box {
+        position: fixed;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        padding: 10px 20px;
+        border-radius: 8px;
+        background-color: rgba(0, 0, 0, 0.8);
+        color: white;
+        font-size: 0.875rem;
+        display: none; /* Caché par défaut */
+        z-index: 1000;
+        font-family: 'Inter', sans-serif;
+        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+      }
+
+      /* Style for the canvas container */
+      #kite-visualisation-container {
+          position: relative;
+          width: 80%; /* Réduction de la largeur du conteneur */
+          aspect-ratio: 3 / 2; /* Maintenir les proportions */
+          background-color: #e2e8f0; /* bg-slate-200 */
+          border-radius: 0.75rem; /* rounded-xl */
+          overflow: hidden; /* Assurer que le canvas reste dans les limites */
+          margin: 0 auto; /* Centrer le conteneur */
+      }
+      #kite-canvas {
+          position: absolute;
+          top: 0;
+          left: 0;
+          width: 100%;
+          height: 100%;
+          display: block; /* Supprime l'espace supplémentaire sous le canvas */
+      }
+
+      /* Terminal Styling */
+      #terminal-output {
+        height: 150px; /* Hauteur fixe */
+        background-color: #1e293b; /* bg-slate-800 */
+        color: #e2e8f0; /* text-slate-200 */
+        font-family: 'Fira Code', monospace;
+        font-size: 0.8rem;
+        padding: 10px;
+        border-radius: 0.5rem; /* rounded-lg */
+        overflow-y: scroll; /* Activer le défilement vertical */
+        border: 1px solid #334155; /* border-slate-700 */
+        white-space: pre-wrap; /* Retour à la ligne pour les lignes longues */
+        word-break: break-all; /* Couper les mots longs */
+      }
+       /* Custom scrollbar for terminal */
+      #terminal-output::-webkit-scrollbar { width: 8px; }
+      #terminal-output::-webkit-scrollbar-track { background: #334155; border-radius: 4px; }
+      #terminal-output::-webkit-scrollbar-thumb { background-color: #475569; border-radius: 4px; border: 2px solid #334155; }
+       #terminal-output .log-error { color: #f87171; }
+       #terminal-output .log-warning { color: #facc15; }
+       #terminal-output .log-info { color: #60a5fa; }
+       #terminal-output .log-success { color: #4ade80; }
+       #terminal-output .log-debug { color: #94a3b8; }
+       #terminal-output .log-time { color: #64748b; padding-right: 5px;}
+
+      /* Behavior Button Styling */
+      .behavior-btn {
+        transition: background-color 0.2s ease-in-out, border-color 0.2s ease-in-out, color 0.2s ease-in-out;
+        border: 2px solid transparent;
+      }
+      .behavior-btn.selected:not(.active) { /* Selected but autopilot off */
+         border-color: #60a5fa; /* border-blue-400 */
+         background-color: #dbeafe; /* bg-blue-100 */
+         color: #1e3a8a; /* text-blue-800 */
+      }
+       .behavior-btn.active { /* Autopilot ON and this is the active behavior */
+         background-color: #16a34a; /* bg-green-600 */
+         color: white;
+         border-color: #15803d; /* border-green-700 */
+         font-weight: 600; /* semibold */
+      }
+       .behavior-btn.disabled-behavior { /* Autopilot ON but this is NOT the active behavior */
+          background-color: #e5e7eb; /* bg-gray-200 */
+          color: #6b7280; /* text-gray-500 */
+          cursor: not-allowed;
+          border-color: #d1d5db; /* border-gray-300 */
+       }
+
+
+    </style>
+    <script>
+        // Configuration de Tailwind
+        tailwind.config = {
+          theme: {
+            extend: {
+              fontFamily: {
+                sans: ['Inter', 'sans-serif'],
+                mono: ['Fira Code', 'monospace'],
+              },
+              borderRadius: {
+                'lg': '0.5rem',
+                'xl': '0.75rem',
+                '2xl': '1rem',
+              }
+            }
+          }
+        }
+    </script>
+    <script src="js/models/KitePhysics.js"></script>
+    <script src="js/controllers/AutoPilot.js"></script>
+    <script src="js/simulation/KiteSimulator.js"></script>
+</head>
+<body class="bg-gradient-to-br from-blue-100 to-blue-300 min-h-screen flex flex-col items-center p-6">
+    <header class="text-center mb-6">
+        <h1 class="text-4xl font-bold text-blue-800">Autopilote Cerf-Volant</h1>
+        <p class="text-blue-600">Interface de contrôle, visualisation et diagnostic</p>
+    </header>
+
+    <main class="w-full max-w-5xl grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Section Statut Système -->
+        <section class="bg-white p-4 rounded-lg shadow-md space-y-4">
+            <h2 class="text-lg font-semibold text-blue-800">Statut Système</h2>
+            <div class="space-y-2">
+                <div class="flex justify-between">
+                    <span>Altitude :</span>
+                    <span id="current-altitude" class="font-bold text-blue-700">-- m</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Vitesse :</span>
+                    <span id="current-speed" class="font-bold text-blue-700">-- m/s</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Vent :</span>
+                    <span id="current-wind" class="font-bold text-blue-700">-- km/h</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Batterie :</span>
+                    <span id="current-battery" class="font-bold text-blue-700">-- %</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Pitch :</span>
+                    <span id="display-pitch" class="font-bold text-blue-700">-- °</span>
+                </div>
+                <div class="flex justify-between">
+                    <span>Roll :</span>
+                    <span id="display-roll" class="font-bold text-blue-700">-- °</span>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section Contrôle -->
+        <section class="bg-white p-4 rounded-lg shadow-md space-y-4">
+            <h2 class="text-lg font-semibold text-blue-800">Mode de Contrôle</h2>
+            <div class="flex justify-around">
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <input type="radio" name="controlMode" value="auto" id="mode-auto" class="form-radio text-blue-600" checked>
+                    <span>Auto</span>
+                </label>
+                <label class="flex items-center space-x-2 cursor-pointer">
+                    <input type="radio" name="controlMode" value="manual" id="mode-manual" class="form-radio text-green-600">
+                    <span>Manuel</span>
+                </label>
+            </div>
+            <div id="autopilot-controls" class="space-y-4">
+                <h3 class="text-md font-semibold text-blue-600">Pilote Auto</h3>
+                <div class="flex justify-between">
+                    <span>Statut :</span>
+                    <span id="autopilot-status" class="font-bold text-blue-700">Inactif</span>
+                </div>
+                <label for="target-altitude" class="block text-sm">Altitude Cible (m) :</label>
+                <input type="number" id="target-altitude" value="100" min="10" step="10" class="w-full p-2 border rounded-lg">
+                <button id="autopilot-toggle" class="w-full bg-blue-600 text-white py-2 rounded-lg">Démarrer Pilote Auto</button>
+            </div>
+            <div id="manual-controls" class="hidden space-y-4">
+                <h3 class="text-md font-semibold text-green-600">Contrôle Manuel</h3>
+                <div class="grid grid-cols-2 gap-2">
+                    <button class="bg-green-600 text-white py-2 rounded-lg">Tirer G</button>
+                    <button class="bg-green-600 text-white py-2 rounded-lg">Tirer D</button>
+                    <button class="bg-orange-500 text-white py-2 rounded-lg">Relâcher G</button>
+                    <button class="bg-orange-500 text-white py-2 rounded-lg">Relâcher D</button>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section Visualisation -->
+        <section class="bg-white p-4 rounded-lg shadow-md space-y-4 lg:col-span-2">
+            <h2 class="text-lg font-semibold text-blue-800">Visualisation</h2>
+            <div id="kite-visualisation-container" class="w-full h-64 bg-blue-100 rounded-lg">
+                <canvas id="kite-canvas"></canvas>
+            </div>
+        </section>
+    </main>
+
+    <footer class="mt-6 text-center text-sm text-blue-600">
+        © 2024 Autopilote Cerf-Volant. Tous droits réservés.
+    </footer>
+
+    <script src="js/models/KitePhysics.js"></script>
+    <script src="js/controllers/AutoPilot.js"></script>
+    <script src="js/simulation/KiteSimulator.js"></script>
+    <script src="js/sensors.js"></script>
+    <script src="js/visualization.js"></script>
+    <script src="js/kiteControl.js"></script>
+    <script src="js/esp32Communication.js"></script>
+</body>
+</html>
